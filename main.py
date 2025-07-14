@@ -1,8 +1,7 @@
 import logging
 import os
-import asyncio
-from telegram import Bot
-from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler
+from telegram import Bot, Update
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 from datetime import datetime
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -19,13 +18,13 @@ def avaliar_setup(setup):
 
 # 🔐 Variáveis de ambiente do Render
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-CHANNEL_ID = os.getenv("CHANNEL_ID")  # Exemplo: @SentinelSignals
+CHANNEL_ID = os.getenv("CHANNEL_ID")  # Ex: @SentinelSignals
 
 bot = Bot(token=BOT_TOKEN)
 logging.basicConfig(level=logging.INFO)
 
 # 📩 Função principal que envia sinal
-async def enviar_sinal(context):
+async def enviar_sinal(context: ContextTypes.DEFAULT_TYPE):
     setup = {
         'estrutura': 'quebra de estrutura',
         'order_block': True,
@@ -58,7 +57,6 @@ async def enviar_sinal(context):
     """
     await context.bot.send_message(chat_id=CHANNEL_ID, text=texto, parse_mode='HTML')
 
-    # 📈 Gráfico com marcações visuais
     fig, ax = plt.subplots()
     ax.plot([1, 2, 3], [float(sl), float(entrada), float(tp1)], marker='o')
     ax.axhline(y=float(tp1), color='green', linestyle='--', label='TP1')
@@ -70,27 +68,18 @@ async def enviar_sinal(context):
     await context.bot.send_photo(chat_id=CHANNEL_ID, photo=open("grafico.png", "rb"))
 
 # /start para ativar o bot
-async def start(update, context):
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("🤖 SentinelCriptoBot está ativo e pronto!")
 
-# Tarefa para enviar sinal automaticamente 5 segundos depois do arranque
-async def start_jobs(app):
-    await asyncio.sleep(5)
-    class FakeContext:
-        def __init__(self, bot):
-            self.bot = bot
-    fake_context = FakeContext(app.bot)
-    await enviar_sinal(fake_context)
-
-# MAIN async
-async def main():
+# MAIN
+def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
 
-    asyncio.create_task(start_jobs(app))
+    # Removido job_queue por causa do erro com weakref
+    # Em vez disso, vamos só ativar manualmente com /start (por enquanto)
 
-    await app.run_polling()
+    app.run_polling()
 
 if __name__ == '__main__':
-    asyncio.run(main())
-
+    main()
