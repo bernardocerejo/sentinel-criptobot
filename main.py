@@ -4,6 +4,11 @@ import asyncio
 from datetime import datetime, timedelta
 import matplotlib.pyplot as plt
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
+from telegram import Bot
+import nest_asyncio
+
+# Aplicar patch para evitar erro "Cannot close a running event loop"
+nest_asyncio.apply()
 
 # Variáveis do ambiente (definir no Render)
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -36,19 +41,26 @@ def atualizar_contagem(status):
         data["red"] += 1
     salvar_status(data)
 
-# Score do setup
+# Lógica simples para avaliar o setup e retornar score (exemplo)
 def avaliar_setup(setup):
     score = 0
-    if setup['estrutura'] == 'quebra de estrutura': score += 1
-    if setup['order_block']: score += 1
-    if setup['fvg']: score += 1
-    if setup['rsi'] < 30 or setup['rsi'] > 70: score += 1
-    if setup['volume'] > setup['media_volume']: score += 1
+    if setup.get('estrutura') == 'quebra de estrutura':
+        score += 1
+    if setup.get('order_block'):
+        score += 1
+    if setup.get('fvg'):
+        score += 1
+    rsi = setup.get('rsi', 50)
+    if rsi < 30 or rsi > 70:
+        score += 1
+    if setup.get('volume', 0) > setup.get('media_volume', 0):
+        score += 1
     return score  # Máximo 5
 
-# Enviar sinal
+# Função que envia sinal
 async def enviar_sinal(context: ContextTypes.DEFAULT_TYPE, setup=None):
     if setup is None:
+        # Setup de exemplo
         setup = {
             'estrutura': 'quebra de estrutura',
             'order_block': True,
@@ -60,7 +72,7 @@ async def enviar_sinal(context: ContextTypes.DEFAULT_TYPE, setup=None):
     score = avaliar_setup(setup)
     if score < 4:
         print("❌ Setup rejeitado. Score:", score)
-        atualizar_contagem("red")
+        atualizar_contagem("red")  # Sinal rejeitado = red (stop loss)
         return
 
     ativo = 'BTCUSDT'
@@ -78,11 +90,12 @@ async def enviar_sinal(context: ContextTypes.DEFAULT_TYPE, setup=None):
 
 🧠 Score de Confluência: <b>{score}/5</b>
 🕒 {datetime.now().strftime('%d/%m/%Y %H:%M')}
-"""
+    """
 
+    # Enviar texto
     await context.bot.send_message(chat_id=CHANNEL_ID, text=texto, parse_mode='HTML')
 
-    # Gráfico
+    # Criar gráfico simples
     fig, ax = plt.subplots()
     ax.plot([1, 2, 3], [sl, entrada, tp1], marker='o')
     ax.axhline(y=tp1, color='green', linestyle='--', label='TP1')
@@ -94,16 +107,18 @@ async def enviar_sinal(context: ContextTypes.DEFAULT_TYPE, setup=None):
     plt.savefig("grafico.png")
     plt.close(fig)
 
+    # Enviar gráfico
     with open("grafico.png", "rb") as photo:
         await context.bot.send_photo(chat_id=CHANNEL_ID, photo=photo)
 
+    # Contagem: se score >=4, sinal considerado green (take profit esperado)
     atualizar_contagem("green")
 
 # Comando /start
 async def start(update, context):
     await update.message.reply_text("🤖 SentinelCriptoBot está ativo e pronto!")
 
-# Comando /sinal
+# Comando /sinal para testar adicionar manualmente green/red
 async def comando_sinal(update, context):
     if len(context.args) != 1 or context.args[0].lower() not in ["green", "red"]:
         await update.message.reply_text("Use: /sinal green ou /sinal red")
@@ -112,7 +127,7 @@ async def comando_sinal(update, context):
     atualizar_contagem(status)
     await update.message.reply_text(f"Sinal '{status}' registrado!")
 
-# Resumo semanal
+# Enviar resumo semanal domingo às 22h
 async def resumo_semanal(context: ContextTypes.DEFAULT_TYPE):
     data = ler_status()
     texto = f"""
@@ -126,8 +141,8 @@ Semana encerrada! Próxima começa já. 💪
     await context.bot.send_message(chat_id=CHANNEL_ID, text=texto)
     salvar_status({"green": 0, "red": 0})
 
-# Agendar envio domingo às 22h
-async def agendador_resumo(bot):
+# Agendador que roda sempre e espera até domingo 22h para enviar resumo
+async def agendador_resumo(app):
     while True:
         now = datetime.now()
         dias_ate_domingo = (6 - now.weekday()) % 7
@@ -136,28 +151,24 @@ async def agendador_resumo(bot):
         if wait_segundos < 0:
             wait_segundos += 7*24*3600
         await asyncio.sleep(wait_segundos)
-        await resumo_semanal(ContextTypes.DEFAULT_TYPE(bot=bot))
-
-# Corre agendamentos ao iniciar o bot
-async def agendar_tudo(application):
-    asyncio.create_task(agendador_resumo(application.bot))
+        await resumo_semanal(app.bot)
 
 # Função principal
 async def main():
     init_status()
-    app = ApplicationBuilder().token(BOT_TOKEN).post_init(agendar_tudo).build()
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("sinal", comando_sinal))
 
-    # Envia um sinal 10s após iniciar (teste)
+    # Para testes: enviar um sinal automático 10s após iniciar
     async def sinal_automatico():
         await asyncio.sleep(10)
-        await enviar_sinal(ContextTypes.DEFAULT_TYPE(bot=app.bot))
+        await enviar_sinal(app)
 
     asyncio.create_task(sinal_automatico())
+    asyncio.create_task(agendador_resumo(app))
 
     await app.run_polling()
 
-# Execução
 if __name__ == "__main__":
     asyncio.run(main())
