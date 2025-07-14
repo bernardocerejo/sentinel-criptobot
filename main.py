@@ -1,81 +1,36 @@
 import os
 import logging
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
-from telegram import Update
 from datetime import datetime
-import matplotlib.pyplot as plt
-import asyncio
 
+# Ativa logging para debug
 logging.basicConfig(level=logging.INFO)
 
+# Variáveis do bot (usa as tuas variáveis de ambiente no Render ou localmente)
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-CHANNEL_ID = os.getenv("CHANNEL_ID")
+CHANNEL_ID = os.getenv("CHANNEL_ID")  # Exemplo: @SentinelSignals ou ID de chat
 
-def avaliar_setup(setup):
-    score = 0
-    if setup['estrutura'] == 'quebra de estrutura': score += 1
-    if setup['order_block']: score += 1
-    if setup['fvg']: score += 1
-    if setup['rsi'] < 30 or setup['rsi'] > 70: score += 1
-    if setup['volume'] > setup['media_volume']: score += 1
-    return score
-
+# Função que envia o sinal (exemplo simples)
 async def enviar_sinal(context: ContextTypes.DEFAULT_TYPE):
-    setup = {
-        'estrutura': 'quebra de estrutura',
-        'order_block': True,
-        'fvg': True,
-        'rsi': 25,
-        'volume': 1500,
-        'media_volume': 1000
-    }
-    score = avaliar_setup(setup)
-    if score < 4:
-        logging.info(f"Setup rejeitado. Score: {score}")
-        return
+    texto = f"🚨 Sinal automático enviado!\n🕒 {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}"
+    # Enviar no chat onde foi usado /start
+    await context.bot.send_message(chat_id=context.job.chat_id, text=texto)
 
-    ativo = 'BTCUSDT'
-    tp1 = '68.200'
-    tp2 = '69.000'
-    sl = '66.400'
-    entrada = '67.100'
-
-    texto = f"""
-🚨 <b>NOVO SINAL: {ativo}</b>
-📥 Entrada: <b>{entrada}</b>
-🟢 TP1: {tp1}
-🟢 TP2: {tp2}
-🔴 SL: {sl}
-
-🧠 Score de Confluência: <b>{score}/5</b>
-🕒 {datetime.now().strftime('%d/%m/%Y %H:%M')}
-    """
-    await context.bot.send_message(chat_id=CHANNEL_ID, text=texto, parse_mode='HTML')
-
-    # Gráfico
-    fig, ax = plt.subplots()
-    ax.plot([1, 2, 3], [float(sl), float(entrada), float(tp1)], marker='o')
-    ax.axhline(y=float(tp1), color='green', linestyle='--', label='TP1')
-    ax.axhline(y=float(tp2), color='green', linestyle='--', label='TP2')
-    ax.axhline(y=float(sl), color='red', linestyle='--', label='SL')
-    plt.title(f"{ativo} Setup")
-    plt.legend()
-    plt.savefig("grafico.png")
-    plt.close(fig)
-
-    with open("grafico.png", "rb") as photo:
-        await context.bot.send_photo(chat_id=CHANNEL_ID, photo=photo)
-
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# Comando /start
+async def start(update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("🤖 SentinelCriptoBot está ativo e pronto!")
 
-    # Agenda o envio do sinal para daqui a 5 segundos
-    context.job_queue.run_once(enviar_sinal, when=5)
+    # Agenda enviar_sinal para 5 segundos depois, no chat que chamou /start
+    context.job_queue.run_once(enviar_sinal, when=5, chat_id=update.effective_chat.id)
 
+# Função principal para iniciar o bot
 def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
+
+    # Adicionar o handler do comando /start
     app.add_handler(CommandHandler("start", start))
 
+    # Iniciar o bot (polling)
     app.run_polling()
 
 if __name__ == '__main__':
