@@ -6,16 +6,13 @@ from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler
 from datetime import datetime
 import matplotlib.pyplot as plt
 
-# Configura logging
 logging.basicConfig(level=logging.INFO)
 
-# Variáveis de ambiente (definir no Render)
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-CHANNEL_ID = os.getenv("CHANNEL_ID")  # ex: @SentinelSignals
+CHANNEL_ID = os.getenv("CHANNEL_ID")
 
 bot = Bot(token=BOT_TOKEN)
 
-# Avalia setup e retorna score 0-5
 def avaliar_setup(setup):
     score = 0
     if setup['estrutura'] == 'quebra de estrutura': score += 1
@@ -34,13 +31,12 @@ async def enviar_sinal(context: ContextTypes.DEFAULT_TYPE, *,
                        prioridade: str,
                        tipo_trade: str,
                        setup: dict):
-    
+
     score = avaliar_setup(setup)
     if score < 3:
         logging.info(f"Setup rejeitado (score {score}) para {ativo}")
         return
-    
-    # Mensagem formatada
+
     texto = f"""
 🚨 <b>NOVO SINAL: {ativo}</b>
 🔰 Prioridade: <b>{prioridade}</b>
@@ -54,14 +50,12 @@ async def enviar_sinal(context: ContextTypes.DEFAULT_TYPE, *,
 🕒 {datetime.now().strftime('%d/%m/%Y %H:%M')}
     """
 
-    # Botões para possível ação (exemplo: fechar posição, etc)
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("Fechar Posição", callback_data=f"fechar_{ativo}")],
     ])
 
     await context.bot.send_message(chat_id=CHANNEL_ID, text=texto, parse_mode='HTML', reply_markup=keyboard)
 
-    # Criar gráfico simples
     fig, ax = plt.subplots(figsize=(6,4))
     ax.plot([1, 2, 3, 4], [sl, entrada, tp1, tp2], marker='o')
     ax.axhline(y=tp1, color='green', linestyle='--', label='TP1')
@@ -77,11 +71,10 @@ async def enviar_sinal(context: ContextTypes.DEFAULT_TYPE, *,
         await context.bot.send_photo(chat_id=CHANNEL_ID, photo=photo)
 
 
-# /start handler
 async def start(update, context):
     await update.message.reply_text("🤖 SentinelCriptoBot está ativo e pronto!")
 
-# Função para exemplo enviar sinal no arranque
+
 async def start_jobs(app):
     await asyncio.sleep(5)
 
@@ -106,14 +99,15 @@ async def start_jobs(app):
         setup=setup_exemplo
     )
 
-def main():
+
+async def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
 
-    # Inicia tarefa que envia sinal de exemplo após 5s
     asyncio.create_task(start_jobs(app))
 
-    app.run_polling()
+    await app.run_polling()
+
 
 if __name__ == '__main__':
-    main()
+    asyncio.run(main())
