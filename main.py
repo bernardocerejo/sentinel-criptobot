@@ -4,11 +4,6 @@ import asyncio
 from datetime import datetime, timedelta
 import matplotlib.pyplot as plt
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
-from telegram import Bot
-import nest_asyncio
-
-# Aplicar patch para evitar erro "Cannot close a running event loop"
-nest_asyncio.apply()
 
 # Variáveis do ambiente (definir no Render)
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -44,20 +39,14 @@ def atualizar_contagem(status):
 # Lógica simples para avaliar o setup e retornar score (exemplo)
 def avaliar_setup(setup):
     score = 0
-    if setup.get('estrutura') == 'quebra de estrutura':
-        score += 1
-    if setup.get('order_block'):
-        score += 1
-    if setup.get('fvg'):
-        score += 1
-    rsi = setup.get('rsi', 50)
-    if rsi < 30 or rsi > 70:
-        score += 1
-    if setup.get('volume', 0) > setup.get('media_volume', 0):
-        score += 1
+    if setup['estrutura'] == 'quebra de estrutura': score += 1
+    if setup['order_block']: score += 1
+    if setup['fvg']: score += 1
+    if setup['rsi'] < 30 or setup['rsi'] > 70: score += 1
+    if setup['volume'] > setup['media_volume']: score += 1
     return score  # Máximo 5
 
-# Função que envia sinal
+# Função que envia sinal (exemplo)
 async def enviar_sinal(context: ContextTypes.DEFAULT_TYPE, setup=None):
     if setup is None:
         # Setup de exemplo
@@ -171,4 +160,5 @@ async def main():
     await app.run_polling()
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    import asyncio
+    asyncio.get_event_loop().run_until_complete(main())
