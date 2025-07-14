@@ -4,7 +4,7 @@ import asyncio
 from datetime import datetime, timedelta
 import matplotlib.pyplot as plt
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
-from telegram import Update
+from telegram import Bot, Update 
 
 # Variáveis do ambiente (definir no Render)
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
