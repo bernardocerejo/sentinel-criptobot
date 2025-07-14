@@ -1,12 +1,16 @@
-import logging
 import os
-import asyncio
-from telegram import Bot
-from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler
+import logging
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
+from telegram import Update
 from datetime import datetime
 import matplotlib.pyplot as plt
+import asyncio
 
-# Avaliação do setup
+logging.basicConfig(level=logging.INFO)
+
+BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+CHANNEL_ID = os.getenv("CHANNEL_ID")
+
 def avaliar_setup(setup):
     score = 0
     if setup['estrutura'] == 'quebra de estrutura': score += 1
@@ -16,13 +20,6 @@ def avaliar_setup(setup):
     if setup['volume'] > setup['media_volume']: score += 1
     return score
 
-# Variáveis de ambiente
-BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-CHANNEL_ID = os.getenv("CHANNEL_ID")
-
-logging.basicConfig(level=logging.INFO)
-
-# Função que envia sinal
 async def enviar_sinal(context: ContextTypes.DEFAULT_TYPE):
     setup = {
         'estrutura': 'quebra de estrutura',
@@ -32,10 +29,9 @@ async def enviar_sinal(context: ContextTypes.DEFAULT_TYPE):
         'volume': 1500,
         'media_volume': 1000
     }
-
     score = avaliar_setup(setup)
     if score < 4:
-        print("❌ Setup rejeitado. Score:", score)
+        logging.info(f"Setup rejeitado. Score: {score}")
         return
 
     ativo = 'BTCUSDT'
@@ -65,31 +61,21 @@ async def enviar_sinal(context: ContextTypes.DEFAULT_TYPE):
     plt.title(f"{ativo} Setup")
     plt.legend()
     plt.savefig("grafico.png")
-    plt.close(fig)  # Fecha o plot para evitar consumo excessivo de memória
-    await context.bot.send_photo(chat_id=CHANNEL_ID, photo=open("grafico.png", "rb"))
+    plt.close(fig)
 
-# Comando /start
-async def start(update, context):
+    with open("grafico.png", "rb") as photo:
+        await context.bot.send_photo(chat_id=CHANNEL_ID, photo=photo)
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("🤖 SentinelCriptoBot está ativo e pronto!")
 
-# Função para executar tarefa após delay
-async def start_jobs(app):
-    await asyncio.sleep(5)
-    class FakeContext:
-        def __init__(self, bot):
-            self.bot = bot
-    fake_context = FakeContext(app.bot)
-    await enviar_sinal(fake_context)
+    # Agenda o envio do sinal para daqui a 5 segundos
+    context.job_queue.run_once(enviar_sinal, when=5)
 
-# MAIN - função síncrona
 def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
 
-    # Inicia a tarefa assíncrona para enviar sinal depois de 5s
-    asyncio.create_task(start_jobs(app))
-
-    # Inicia o polling (este método é síncrono)
     app.run_polling()
 
 if __name__ == '__main__':
