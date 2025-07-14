@@ -158,10 +158,10 @@ if __name__ == "__main__":
         await asyncio.sleep(10)
         await enviar_sinal(app)
 
-   async def agendar_tudo(application):
+  # Esta função vai correr quando o bot iniciar
+async def agendar_tudo(application):
     asyncio.create_task(sinal_automatico())
     asyncio.create_task(agendador_resumo(application))
-
 
     app.post_init = agendar_tudo
 
