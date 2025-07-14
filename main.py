@@ -4,7 +4,6 @@ import asyncio
 from datetime import datetime, timedelta
 import matplotlib.pyplot as plt
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
-from telegram import Bot, Update 
 
 # Variáveis do ambiente (definir no Render)
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -12,19 +11,23 @@ CHANNEL_ID = os.getenv("CHANNEL_ID")  # Pode ser "@seucanal" ou ID numérico
 
 STATUS_FILE = "status_sinais.json"
 
+# Inicia arquivo status se não existir
 def init_status():
     if not os.path.exists(STATUS_FILE):
         with open(STATUS_FILE, "w") as f:
             json.dump({"green": 0, "red": 0}, f)
 
+# Lê status atual
 def ler_status():
     with open(STATUS_FILE, "r") as f:
         return json.load(f)
 
+# Salva status atualizado
 def salvar_status(data):
     with open(STATUS_FILE, "w") as f:
         json.dump(data, f)
 
+# Atualiza contagem green/red
 def atualizar_contagem(status):
     data = ler_status()
     if status == "green":
@@ -33,6 +36,7 @@ def atualizar_contagem(status):
         data["red"] += 1
     salvar_status(data)
 
+# Score do setup
 def avaliar_setup(setup):
     score = 0
     if setup['estrutura'] == 'quebra de estrutura': score += 1
@@ -40,9 +44,10 @@ def avaliar_setup(setup):
     if setup['fvg']: score += 1
     if setup['rsi'] < 30 or setup['rsi'] > 70: score += 1
     if setup['volume'] > setup['media_volume']: score += 1
-    return score
+    return score  # Máximo 5
 
-async def enviar_sinal(bot, setup=None):
+# Enviar sinal
+async def enviar_sinal(context: ContextTypes.DEFAULT_TYPE, setup=None):
     if setup is None:
         setup = {
             'estrutura': 'quebra de estrutura',
@@ -73,9 +78,11 @@ async def enviar_sinal(bot, setup=None):
 
 🧠 Score de Confluência: <b>{score}/5</b>
 🕒 {datetime.now().strftime('%d/%m/%Y %H:%M')}
-    """
-    await bot.send_message(chat_id=CHANNEL_ID, text=texto, parse_mode='HTML')
+"""
 
+    await context.bot.send_message(chat_id=CHANNEL_ID, text=texto, parse_mode='HTML')
+
+    # Gráfico
     fig, ax = plt.subplots()
     ax.plot([1, 2, 3], [sl, entrada, tp1], marker='o')
     ax.axhline(y=tp1, color='green', linestyle='--', label='TP1')
@@ -88,14 +95,16 @@ async def enviar_sinal(bot, setup=None):
     plt.close(fig)
 
     with open("grafico.png", "rb") as photo:
-        await bot.send_photo(chat_id=CHANNEL_ID, photo=photo)
+        await context.bot.send_photo(chat_id=CHANNEL_ID, photo=photo)
 
     atualizar_contagem("green")
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# Comando /start
+async def start(update, context):
     await update.message.reply_text("🤖 SentinelCriptoBot está ativo e pronto!")
 
-async def comando_sinal(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# Comando /sinal
+async def comando_sinal(update, context):
     if len(context.args) != 1 or context.args[0].lower() not in ["green", "red"]:
         await update.message.reply_text("Use: /sinal green ou /sinal red")
         return
@@ -103,7 +112,8 @@ async def comando_sinal(update: Update, context: ContextTypes.DEFAULT_TYPE):
     atualizar_contagem(status)
     await update.message.reply_text(f"Sinal '{status}' registrado!")
 
-async def resumo_semanal(bot):
+# Resumo semanal
+async def resumo_semanal(context: ContextTypes.DEFAULT_TYPE):
     data = ler_status()
     texto = f"""
 Resumo Semanal dos Sinais 📊
@@ -113,9 +123,10 @@ Resumo Semanal dos Sinais 📊
 
 Semana encerrada! Próxima começa já. 💪
 """
-    await bot.send_message(chat_id=CHANNEL_ID, text=texto)
+    await context.bot.send_message(chat_id=CHANNEL_ID, text=texto)
     salvar_status({"green": 0, "red": 0})
 
+# Agendar envio domingo às 22h
 async def agendador_resumo(bot):
     while True:
         now = datetime.now()
@@ -125,44 +136,28 @@ async def agendador_resumo(bot):
         if wait_segundos < 0:
             wait_segundos += 7*24*3600
         await asyncio.sleep(wait_segundos)
-        await resumo_semanal(bot)
+        await resumo_semanal(ContextTypes.DEFAULT_TYPE(bot=bot))
 
-async def sinal_automatico(bot):
-    await asyncio.sleep(10)
-    await enviar_sinal(bot)
+# Corre agendamentos ao iniciar o bot
+async def agendar_tudo(application):
+    asyncio.create_task(agendador_resumo(application.bot))
 
+# Função principal
 async def main():
     init_status()
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
+    app = ApplicationBuilder().token(BOT_TOKEN).post_init(agendar_tudo).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("sinal", comando_sinal))
 
-    bot = Bot(BOT_TOKEN)
+    # Envia um sinal 10s após iniciar (teste)
+    async def sinal_automatico():
+        await asyncio.sleep(10)
+        await enviar_sinal(ContextTypes.DEFAULT_TYPE(bot=app.bot))
 
-    asyncio.create_task(sinal_automatico(bot))
-    asyncio.create_task(agendador_resumo(bot))
+    asyncio.create_task(sinal_automatico())
 
     await app.run_polling()
 
+# Execução
 if __name__ == "__main__":
-    from telegram.ext import ApplicationBuilder, CommandHandler
-
-    init_status()
-
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("sinal", comando_sinal))
-
-    # Enviar sinal automático após 10s
-    async def sinal_automatico():
-        await asyncio.sleep(10)
-        await enviar_sinal(app)
-
-  # Esta função vai correr quando o bot iniciar
-async def agendar_tudo(application):
-    asyncio.create_task(sinal_automatico())
-    asyncio.create_task(agendador_resumo(application))
-
-    app.post_init = agendar_tudo
-
-    app.run_polling()
+    asyncio.run(main())
