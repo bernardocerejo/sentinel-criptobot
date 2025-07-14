@@ -79,8 +79,10 @@ def main():
     app.add_handler(CommandHandler("start", start))
     
     # ⏱️ Enviar um sinal 5 segundos depois do arranque
-    app.job_queue.run_once(enviar_sinal, 5)
+    # app.job_queue.run_once(enviar_sinal, 5)
+    
     app.run_polling()
+
 
 if __name__ == '__main__':
     main()
