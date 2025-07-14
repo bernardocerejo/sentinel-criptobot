@@ -145,6 +145,23 @@ async def main():
     await app.run_polling()
 
 if __name__ == "__main__":
-    import asyncio
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(main())
+    from telegram.ext import ApplicationBuilder, CommandHandler
+
+    init_status()
+
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("sinal", comando_sinal))
+
+    # Enviar sinal automático após 10s
+    async def sinal_automatico():
+        await asyncio.sleep(10)
+        await enviar_sinal(app)
+
+    async def agendar_tudo():
+        asyncio.create_task(sinal_automatico())
+        asyncio.create_task(agendador_resumo(app))
+
+    app.post_init = agendar_tudo
+
+    app.run_polling()
