@@ -19,13 +19,13 @@ def avaliar_setup(setup):
 
 # 🔐 Variáveis de ambiente do Render
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-CHANNEL_ID = os.getenv("CHANNEL_ID")  # Ex: @SentinelSignals
+CHANNEL_ID = os.getenv("CHANNEL_ID")  # Exemplo: @SentinelSignals
 
 bot = Bot(token=BOT_TOKEN)
 logging.basicConfig(level=logging.INFO)
 
 # 📩 Função principal que envia sinal
-async def enviar_sinal(context: ContextTypes.DEFAULT_TYPE):
+async def enviar_sinal(context):
     setup = {
         'estrutura': 'quebra de estrutura',
         'order_block': True,
@@ -73,16 +73,24 @@ async def enviar_sinal(context: ContextTypes.DEFAULT_TYPE):
 async def start(update, context):
     await update.message.reply_text("🤖 SentinelCriptoBot está ativo e pronto!")
 
-# MAIN
-def main():
+# Tarefa para enviar sinal automaticamente 5 segundos depois do arranque
+async def start_jobs(app):
+    await asyncio.sleep(5)
+    class FakeContext:
+        def __init__(self, bot):
+            self.bot = bot
+    fake_context = FakeContext(app.bot)
+    await enviar_sinal(fake_context)
+
+# MAIN async
+async def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
-    
-    # ⏱️ Enviar um sinal 5 segundos depois do arranque
-    # app.job_queue.run_once(enviar_sinal, 5)
-    
-    app.run_polling()
 
+    asyncio.create_task(start_jobs(app))
+
+    await app.run_polling()
 
 if __name__ == '__main__':
-    main()
+    asyncio.run(main())
+
