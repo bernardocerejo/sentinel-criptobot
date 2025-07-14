@@ -158,9 +158,10 @@ if __name__ == "__main__":
         await asyncio.sleep(10)
         await enviar_sinal(app)
 
-    async def agendar_tudo():
-        asyncio.create_task(sinal_automatico())
-        asyncio.create_task(agendador_resumo(app))
+   async def agendar_tudo(application):
+    asyncio.create_task(sinal_automatico())
+    asyncio.create_task(agendador_resumo(application))
+
 
     app.post_init = agendar_tudo
 
